@@ -1,60 +1,36 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
+// index.js
 const axios = require("axios");
 const FormData = require("form-data");
 
-const app = express();
-const upload = multer();
-const port = 3000;
+module.exports = async (req, res) => {
+  if (req.method === "POST") {
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
 
-app.use(cors());
+      const form = new FormData();
+      form.append("files[]", buffer, {
+        filename: "upload-" + Date.now(),
+        contentType: "application/octet-stream"
+      });
 
-// fungsi upload ke Pomf
-async function uploadToPomf(buffer) {
-  const form = new FormData();
-  form.append("files[]", buffer, {
-    filename: "upload-" + Date.now(),
-    contentType: "application/octet-stream"
-  });
+      const pomf = await axios.post("https://pomf.lain.la/upload.php", form, {
+        headers: {
+          ...form.getHeaders(),
+          origin: "https://pomf.lain.la",
+          "user-agent": "Postify/1.0.0"
+        }
+      });
 
-  const res = await axios.post("https://pomf.lain.la/upload.php", form, {
-    headers: {
-      ...form.getHeaders(),
-      origin: "https://pomf.lain.la",
-      "user-agent": "Postify/1.0.0"
+      res.setHeader("Content-Type", "application/json");
+      res.status(200).json({ url: pomf?.data?.files?.[0]?.url || null });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
-  });
-
-  return res?.data?.files?.[0]?.url || null;
-}
-
-// endpoint upload proxy
-app.post("/upload", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
-    const url = await uploadToPomf(req.file.buffer);
-
-    if (!url) {
-      return res.status(500).json({ error: "Upload failed" });
-    }
-
-    res.json({ success: true, url });
-  } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ error: err.message });
+  } else {
+    res.status(200).json({ message: "Pomf Proxy API is running" });
   }
-});
-
-// default route
-app.get("/", (req, res) => {
-  res.json({ message: "Pomf Proxy API is running!" });
-});
-
-// jalankan server
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
+};
