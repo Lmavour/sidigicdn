@@ -1,0 +1,39 @@
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import Pomf from "./pomf.js";
+
+const app = express();
+const port = 3000;
+
+// aktifkan CORS
+app.use(cors());
+
+// pakai multer untuk handle file upload dari form-data
+const upload = multer();
+
+// endpoint upload
+app.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // kirim buffer file ke Pomf
+    const url = await Pomf(req.file.buffer);
+
+    if (!url) {
+      return res.status(500).json({ error: "Failed to upload to Pomf" });
+    }
+
+    res.json({ url });
+  } catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// jalankan server
+app.listen(port, () => {
+  console.log(`Pomf proxy API running at http://localhost:${port}`);
+});
